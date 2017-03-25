@@ -193,6 +193,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 
         pagelet_b.set_html('''<h2 id=pagelet_b>Pagelet B</h2>
 <script>console.log(document.getElementById('pagelet_b') ? 'OK' : 'FAIL');</script>
+<style>p { font-style: italic; }</style>
 <p>This is pagelet B.''')
         pagelet_writer.write_fixups(buffer)
         if pagelet_writer.has_pending_fixups():
