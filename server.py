@@ -83,6 +83,11 @@ switch (placeholderParent.nodeType) {{
         throw Exception('Not implemented')
 }}
 placeholderParent.replaceChild(replacement, placeholder);
+
+// Remove this <script> element from the DOM.
+var scripts = document.getElementsByTagName('script');
+var script = scripts[scripts.length - 1];
+script.parentNode.removeChild(script);
 }}());'''.format(
                 # HACK(strager): We should properly HTML-escape.
                 html=json.dumps(temp_buffer.getvalue().decode(encoding)).replace('<', r'\u003c'),
