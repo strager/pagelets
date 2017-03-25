@@ -45,6 +45,24 @@ class HTMLPagelet(object, metaclass=abc.ABCMeta):
         with io.BytesIO() as temp_buffer:
             pending_pagelets = self.write_in_place(temp_buffer, placeholder_index_factory=placeholder_index_factory)
             js = '''(function () {{
+function fixScriptElements(root) {{
+    var scripts = root.querySelectorAll('script');
+    scripts = Array.prototype.slice.call(scripts);
+    var i;
+    for (i = 0; i < scripts.length; ++i) {{
+        var oldScript = scripts[i];
+        var newScript = document.createElement('script');
+        if (oldScript.src !== '') {{
+            newScript.src = oldScript.src;
+        }}
+        newScript.text = oldScript.text;
+        if (oldScript.type !== '') {{
+            newScript.type = oldScript.type;
+        }}
+        oldScript.parentNode.replaceChild(newScript, oldScript);
+    }}
+}}
+
 var placeholder = document.getElementById({placeholder_id});
 var html = {html};
 
@@ -55,6 +73,7 @@ switch (placeholderParent.nodeType) {{
     case Node.ELEMENT_NODE:
         container = document.createElement(placeholderParent.nodeName);
         container.innerHTML = html;
+        fixScriptElements(container);
         replacement = document.createDocumentFragment();
         while (container.firstChild) {{
             replacement.appendChild(container.removeChild(container.firstChild));
@@ -65,10 +84,11 @@ switch (placeholderParent.nodeType) {{
 }}
 placeholderParent.replaceChild(replacement, placeholder);
 }}());'''.format(
-                html=json.dumps(temp_buffer.getvalue().decode(encoding)),
+                # HACK(strager): We should properly HTML-escape.
+                html=json.dumps(temp_buffer.getvalue().decode(encoding)).replace('<', r'\u003c'),
                 placeholder_id=json.dumps(self.placeholder_id(placeholder_index)),
             )
-        # FIXME(strager): We should HTML-escape.
+        # FIXME(strager): We should properly HTML-escape.
         buffer.write('<script>{js}</script>'.format(js=js).encode(encoding))
         return pending_pagelets
 
@@ -171,7 +191,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         buffer.flush()
         time.sleep(3)
 
-        pagelet_b.set_html('''<h2>Pagelet B</h2>
+        pagelet_b.set_html('''<h2 id=pagelet_b>Pagelet B</h2>
+<script>console.log(document.getElementById('pagelet_b') ? 'OK' : 'FAIL');</script>
 <p>This is pagelet B.''')
         pagelet_writer.write_fixups(buffer)
         if pagelet_writer.has_pending_fixups():
