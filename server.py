@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 class HTMLPagelet(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def write_loaded_content(self, buffer):
+    def is_content_loaded(self):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def is_content_loaded(self):
+    def write_in_place(self, buffer, placeholder_index_factory):
         raise NotImplementedError()
 
     def placeholder_id(self, placeholder_index):
@@ -24,13 +24,6 @@ class HTMLPagelet(object, metaclass=abc.ABCMeta):
 
     def encoding(self):
         return 'utf-8'
-
-    def write_in_place(self, buffer, placeholder_index_factory):
-        if not self.is_content_loaded():
-            self.write_placeholder(buffer, placeholder_index=placeholder_index_factory(self))
-            return [self]
-        self.write_loaded_content(buffer)
-        return []
 
     def write_placeholder(self, buffer, placeholder_index):
         placeholder_id = self.placeholder_id(placeholder_index)
@@ -102,8 +95,9 @@ class LiteralHTMLPagelet(HTMLPagelet):
         super(LiteralHTMLPagelet, self).__init__()
         self.__html = html
 
-    def write_loaded_content(self, buffer):
+    def write_in_place(self, buffer, placeholder_index_factory):
         buffer.write(str.encode(self.__html, self.encoding()))
+        return []
 
     def is_content_loaded(self):
         return True
@@ -116,10 +110,6 @@ class TriggeredHTMLPagelet(HTMLPagelet):
 
     def set_loaded(self):
         self.__loaded = True
-
-    def write_loaded_content(self, buffer):
-        assert self.__loaded
-        self.__pagelet.write_loaded_content(buffer)
 
     def write_in_place(self, buffer, placeholder_index_factory):
         if self.__loaded:
@@ -141,9 +131,6 @@ class MultiHTMLPagelet(HTMLPagelet):
     def __init__(self, pagelets):
         super(MultiHTMLPagelet, self).__init__()
         self.__pagelets = list(pagelets)
-
-    def write_loaded_content(self, buffer):
-        raise NotImplementedError()
 
     def write_in_place(self, buffer, placeholder_index_factory):
         pending_pagelets = []
