@@ -109,21 +109,53 @@ class LiteralHTMLPagelet(HTMLPagelet):
         return True
 
 class TriggeredHTMLPagelet(HTMLPagelet):
-    def __init__(self):
+    def __init__(self, pagelet):
         super(TriggeredHTMLPagelet, self).__init__()
-        self.__html = None
+        self.__pagelet = pagelet
+        self.__loaded = False
 
-    def set_html(self, html):
-        if html is None:
-            raise ValueError()
-        self.__html = html
+    def set_loaded(self):
+        self.__loaded = True
 
     def write_loaded_content(self, buffer):
-        assert self.__html is not None
-        buffer.write(str.encode(self.__html, self.encoding()))
+        assert self.__loaded
+        self.__pagelet.write_loaded_content(buffer)
+
+    def write_in_place(self, buffer, placeholder_index_factory):
+        if self.__loaded:
+            return self.__pagelet.write_in_place(
+                buffer,
+                placeholder_index_factory=placeholder_index_factory,
+            )
+        else:
+            self.write_placeholder(
+                buffer,
+                placeholder_index=placeholder_index_factory(self),
+            )
+            return [self]
 
     def is_content_loaded(self):
-        return self.__html is not None
+        return self.__loaded
+
+class MultiHTMLPagelet(HTMLPagelet):
+    def __init__(self, pagelets):
+        super(MultiHTMLPagelet, self).__init__()
+        self.__pagelets = list(pagelets)
+
+    def write_loaded_content(self, buffer):
+        raise NotImplementedError()
+
+    def write_in_place(self, buffer, placeholder_index_factory):
+        pending_pagelets = []
+        for pagelet in self.__pagelets:
+            pending_pagelets.extend(pagelet.write_in_place(
+                buffer,
+                placeholder_index_factory=placeholder_index_factory,
+            ))
+        return pending_pagelets
+
+    def is_content_loaded(self):
+        return True
 
 class PageletWriter(object):
     def __init__(self):
@@ -186,7 +218,20 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
 <p>This is pagelet A.''')
         pagelet_writer.write_pagelet_in_place(pagelet_a, buffer)
 
-        pagelet_b = TriggeredHTMLPagelet()
+        pagelet_b_1 = TriggeredHTMLPagelet(LiteralHTMLPagelet('<li value=1>Pagelet B 1'))
+        pagelet_b_2 = TriggeredHTMLPagelet(LiteralHTMLPagelet('<li value=2>Pagelet B 2'))
+        pagelet_b_3 = TriggeredHTMLPagelet(LiteralHTMLPagelet('<li value=3>Pagelet B 3'))
+        pagelet_b = TriggeredHTMLPagelet(MultiHTMLPagelet([
+            LiteralHTMLPagelet('''<h2 id=pagelet_b>Pagelet B</h2>
+<script>console.log(document.getElementById('pagelet_b') ? 'OK' : 'FAIL');</script>
+<style>p { font-style: italic; }</style>
+<p>This is pagelet B containing three subpagelets:
+<ol>'''),
+            pagelet_b_1,
+            pagelet_b_2,
+            pagelet_b_3,
+            LiteralHTMLPagelet('''</ol>'''),
+        ]))
         pagelet_writer.write_pagelet_in_place(pagelet_b, buffer)
 
         pagelet_c = LiteralHTMLPagelet('''<h2>Pagelet C</h2>
@@ -196,11 +241,23 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
         buffer.flush()
         time.sleep(3)
 
-        pagelet_b.set_html('''<h2 id=pagelet_b>Pagelet B</h2>
-<script>console.log(document.getElementById('pagelet_b') ? 'OK' : 'FAIL');</script>
-<style>p { font-style: italic; }</style>
-<p>This is pagelet B.''')
+        pagelet_b.set_loaded()
         pagelet_writer.write_fixups(buffer)
+
+        buffer.flush()
+        time.sleep(1)
+
+        pagelet_b_3.set_loaded()
+        pagelet_writer.write_fixups(buffer)
+        pagelet_b_2.set_loaded()
+        pagelet_writer.write_fixups(buffer)
+
+        buffer.flush()
+        time.sleep(1)
+
+        pagelet_b_1.set_loaded()
+        pagelet_writer.write_fixups(buffer)
+
         if pagelet_writer.has_pending_fixups():
             raise Exception('Fixups not all resolved')
 
