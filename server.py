@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class HTMLPagelet(object, metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def is_content_loaded(self):
+    def can_write_fixup(self):
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -99,7 +99,7 @@ class LiteralHTMLPagelet(HTMLPagelet):
         buffer.write(str.encode(self.__html, self.encoding()))
         return []
 
-    def is_content_loaded(self):
+    def can_write_fixup(self):
         return True
 
 class TriggeredHTMLPagelet(HTMLPagelet):
@@ -124,7 +124,7 @@ class TriggeredHTMLPagelet(HTMLPagelet):
             )
             return [self]
 
-    def is_content_loaded(self):
+    def can_write_fixup(self):
         return self.__loaded
 
 class MultiHTMLPagelet(HTMLPagelet):
@@ -141,7 +141,7 @@ class MultiHTMLPagelet(HTMLPagelet):
             ))
         return pending_pagelets
 
-    def is_content_loaded(self):
+    def can_write_fixup(self):
         return True
 
 class PageletWriter(object):
@@ -166,7 +166,7 @@ class PageletWriter(object):
 
     def write_fixups(self, buffer):
         for pagelet in list(self.__placeheld_pagelets):
-            if pagelet.is_content_loaded():
+            if pagelet.can_write_fixup():
                 placeholder_index = self.__pagelet_placeholder_indexes[pagelet]
                 pending_pagelets = pagelet.write_fixup(buffer, placeholder_index=placeholder_index, placeholder_index_factory=self.__pagelet_placeholder_index)
                 self.__placeheld_pagelets.remove(pagelet)
